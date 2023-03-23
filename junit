@@ -1,0 +1,83 @@
+def call(def pipelineParams) {
+    pipeline {
+         environment {
+            GIT_REPO = "${pipelineParams.GIT_REPO}"
+            COLLECTION_NAME = "${pipelineParams.COLLECTION_NAME}"
+            LABEL= "${pipelineParams.LABEL}"
+            RECIPIENT_LIST = "${pipelineParams.RECIPIENT_LIST}"
+            BRANCH = "${pipelineParams.BRANCH}"
+            KATALON = "${pipelineParams.KATALON}"
+            PROJECT_PATH = "${pipelineParams.PROJECT_PATH}"
+            API_KEY = "${pipelineParams.API_KEY}"
+            AUTH_OPTION = "${pipelineParams.AUTH_OPTION}"
+            AUTH_SERVER_TYPE = "${pipelineParams.AUTH_SERVER_TYPE}"
+            AUTH_SERVER_PORT = "${pipelineParams.AUTH_SERVER_PORT}"
+            AUTH_SERVER_ADDRESS = "${pipelineParams.AUTH_SERVER_ADDRESS}"
+            SYSTEM_OPTION = "${pipelineParams.SYSTEM_OPTION}"
+            SYSTEM_SERVER_TYPE = "${pipelineParams.SYSTEM_SERVER_TYPE}"
+            SYSTEM_SERVER_PORT = "${pipelineParams.SYSTEM_SERVER_PORT}"
+            SYSTEM_SERVER_ADDRESS = "${pipelineParams.SYSTEM_SERVER_ADDRESS}"
+            SYSTEM_SERVER_USERNAME = "${pipelineParams.SYSTEM_SERVER_USERNAME}"
+            SYSTEM_PASSWORD = "${pipelineParams.SYSTEM_PASSWORD}"
+            DESIRED_CAPABILITIES = "${pipelineParams.DESIRED_CAPABILITIES}"
+            JUNIT = "${pipelineParams.JUNIT}"
+        }
+        agent { 
+            label "${pipelineParams.LABEL}" 
+        }
+        
+        stages{
+            stage('Email: JobStarted'){
+                steps{
+                    emailext attachLog: true,
+                        compressLog: true,
+                        attachmentsPattern: "${env.FINDSECBUGS_REPORT_NAME}",
+                        body:'$DEFAULT_CONTENT',
+                        recipientProviders: [[$class: 'DevelopersRecipientProvider']],
+                        subject: "Jenkins Build Started: Job ${env.JOB_NAME}",
+                        to:"${RECIPIENT_LIST}"
+    
+                }
+            }
+            stage('Checkout Code'){
+                steps{ 
+                    cleanWs()
+                    checkout scm: [$class : 'GitSCM',
+                    extensions: [[$class: 'RelativeTargetDirectory']],
+                    userRemoteConfigs: [[url : "${GIT_REPO}",
+                    credentialsId: "devops_service_account"]],
+                    branches : [[name: "${BRANCH}"]]],
+                    poll: false
+                }
+            }
+            stage('Run Sanity'){
+                steps{
+                    script {
+                        // katalonc -noSplash -runMode=console -projectPath="%WORKSPACE%\\MproJourneyPOM\\MproJourneyPOM.prj" -retry=0 -testSuiteCollectionPath="${COLLECTION_NAME}" -apiKey="485f987c-38a2-449e-81b8-4efbcbf64bfb" --config -proxy.auth.option=MANUAL_CONFIG -proxy.auth.server.type=HTTP -proxy.auth.server.address=172.23.64.3 -proxy.auth.server.port=3128 -proxy.system.option=MANUAL_CONFIG -proxy.system.server.type=HTTP -proxy.system.server.address=172.23.64.3 -proxy.system.server.port=3128 -proxy.system.username=akshom4641 -proxy.system.password=8vl9EQ/c22tJ8lwl+/HJQA== -proxy.system.applyToDesiredCapabilities=true
+
+                            bat """
+                                ${KATALON} -noSplash -runMode=console -projectPath="${PROJECT_PATH}" -retry=0 -testSuiteCollectionPath="${COLLECTION_NAME}" -apiKey="${API_KEY}" --config -proxy.auth.option=${AUTH_OPTION} -proxy.auth.server.type=${AUTH_SERVER_TYPE} -proxy.auth.server.address=${AUTH_SERVER_ADDRESS} -proxy.auth.server.port=${AUTH_SERVER_PORT} -proxy.system.option=${SYSTEM_OPTION} -proxy.system.server.type=${SYSTEM_SERVER_TYPE} -proxy.system.server.address=${SYSTEM_SERVER_ADDRESS} -proxy.system.server.port=${SYSTEM_SERVER_PORT} -proxy.system.username=${SYSTEM_SERVER_USERNAME} -proxy.system.password=${SYSTEM_PASSWORD} -proxy.system.applyToDesiredCapabilities=${DESIRED_CAPABILITIES}
+                            """
+                    }    
+                }
+            }
+            stage('Junit'){
+                steps{
+                    echo "junit"
+                    //junit 'MproJourneyPOM\\Reports\\*\\SanityHealthCheck*\\*\\*.xml'
+                    //${JUNIT}
+                }
+            }
+        }
+        post {
+            always {
+                emailext attachLog: true,
+                    compressLog: true,
+                    body:'$DEFAULT_CONTENT',
+                    recipientProviders: [[$class: 'DevelopersRecipientProvider']],
+                    subject: "Jenkins Build ${currentBuild.currentResult}: Job ${env.JOB_NAME}",
+                    to:"${RECIPIENT_LIST}"
+            }
+        }
+    }
+}
